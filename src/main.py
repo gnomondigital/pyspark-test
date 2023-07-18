@@ -1,5 +1,5 @@
 from pyspark.sql import SparkSession, DataFrame
-from pyspark.sql.functions import sum, col, desc, regexp_extract, udf, mean
+from pyspark.sql.functions import sum, col, desc, regexp_extract, udf, mean, lit, to_date, substring, asc
 from pyspark.sql.types import StringType
 
 
@@ -23,7 +23,8 @@ store_with_max_sales = output_df.groupBy("Store") \
 
 print(store_with_max_sales)
 
-store_address.withColumn("ZIP_code",regexp_extract(store_address.Address, r'(\d+)$', 1)).show()
+store_address.withColumn("zip_code",regexp_extract(store_address.Address, r'(\d+)$', 1)) \
+    .show()
 
 
 #if the total sales is higher than the mean of  all sales then classification= "High sales"
@@ -35,11 +36,19 @@ def classificationUDF(store_sales,mean):
         return "High sales"
     else:
         return "Low sales"
-    
-walmart_store_sales.select(col("Store"), \
-                           classificationUDF(col("Weekly_Sales"),mean(col("Weekly_Sales"))) \
-                            .alias("classification")).show(truncate=False)
+
+average_sales = walmart_store_sales.select(mean(col("Weekly_Sales")).alias("average_sales")) \
+    .first()["average_sales"]
+
+walmart_store_sales.select(col("Store"), classificationUDF(col("Weekly_Sales"), lit(average_sales)).alias("classification")) \
+                   .show()
                       
 #get the month that has the minimum sales
 
-#add comments
+month_with_min_sales = walmart_store_sales.withColumn("month", substring("Date", 4,8)) \
+                                .groupBy("month") \
+                                .agg(sum("Weekly_Sales").alias("sum_sales")) \
+                                .orderBy(col("sum_sales").asc()) \
+                                .first()["month"]
+
+print(month_with_min_sales)
